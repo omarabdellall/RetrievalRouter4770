@@ -1,0 +1,5 @@
+Strategy                  overall     abst       ku    multi     ss-a     ss-p     ss-u     temp
+Best fixed (C2)             0.690    0.767    0.806    0.504    0.821    0.600    0.906    0.638
+Type oracle                 0.706    0.867    0.806    0.504    0.821    0.700    0.922    0.646
+Per-question oracle         0.806    0.900    0.931    0.620    0.839    0.833    0.969    0.787
+LLM classifier              0.680    0.800    0.778    0.463    0.821    0.667    0.891    0.638

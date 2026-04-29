@@ -1,0 +1,82 @@
+{
+  "abstention": {
+    "abstention": 2,
+    "knowledge-update": 0,
+    "multi-session": 2,
+    "single-session-assistant": 0,
+    "single-session-preference": 0,
+    "single-session-user": 15,
+    "temporal-reasoning": 11,
+    "INVALID": 0
+  },
+  "knowledge-update": {
+    "abstention": 7,
+    "knowledge-update": 2,
+    "multi-session": 12,
+    "single-session-assistant": 0,
+    "single-session-preference": 1,
+    "single-session-user": 44,
+    "temporal-reasoning": 6,
+    "INVALID": 0
+  },
+  "multi-session": {
+    "abstention": 11,
+    "knowledge-update": 0,
+    "multi-session": 12,
+    "single-session-assistant": 0,
+    "single-session-preference": 0,
+    "single-session-user": 69,
+    "temporal-reasoning": 29,
+    "INVALID": 0
+  },
+  "single-session-assistant": {
+    "abstention": 0,
+    "knowledge-update": 0,
+    "multi-session": 41,
+    "single-session-assistant": 8,
+    "single-session-preference": 0,
+    "single-session-user": 6,
+    "temporal-reasoning": 1,
+    "INVALID": 0
+  },
+  "single-session-preference": {
+    "abstention": 1,
+    "knowledge-update": 2,
+    "multi-session": 0,
+    "single-session-assistant": 2,
+    "single-session-preference": 18,
+    "single-session-user": 7,
+    "temporal-reasoning": 0,
+    "INVALID": 0
+  },
+  "single-session-user": {
+    "abstention": 10,
+    "knowledge-update": 0,
+    "multi-session": 2,
+    "single-session-assistant": 0,
+    "single-session-preference": 0,
+    "single-session-user": 46,
+    "temporal-reasoning": 6,
+    "INVALID": 0
+  },
+  "temporal-reasoning": {
+    "abstention": 0,
+    "knowledge-update": 0,
+    "multi-session": 15,
+    "single-session-assistant": 0,
+    "single-session-preference": 0,
+    "single-session-user": 16,
+    "temporal-reasoning": 96,
+    "INVALID": 0
+  },
+  "INVALID": {
+    "abstention": 0,
+    "knowledge-update": 0,
+    "multi-session": 0,
+    "single-session-assistant": 0,
+    "single-session-preference": 0,
+    "single-session-user": 0,
+    "temporal-reasoning": 0,
+    "INVALID": 0
+  }
+}
