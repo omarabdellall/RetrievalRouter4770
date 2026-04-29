@@ -14,8 +14,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cache_file",
         type=str,
-        default="results/phase2/classification_cache.json",
-        help="Classification cache to reuse for efficiency.",
+        default="results/phase3/classification_cache_v2.json",
+        help="Classifier cache file for Phase 3 runs.",
     )
     parser.add_argument("--classifier_model", type=str, default="gpt-4o-mini-2024-07-18")
     parser.add_argument("--openai_api_key", type=str, default=None)

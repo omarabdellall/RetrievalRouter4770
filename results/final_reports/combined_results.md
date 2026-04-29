@@ -22,9 +22,9 @@ Reference: `results/final_reports/phase2_results.md`
 
 ## Phase 3 (Classifier Router)
 
-- Query-only LLM classifier: **0.680** (below C2 by 1.0 point)
-- Gain decomposition vs C2: +18 helped, -23 hurt, net -5
-- Routing accuracy vs oracle choices: 0.474
+- Query-only LLM classifier (v2 prompt + few-shot): **0.700** (above C2 by 1.0 point)
+- Gain decomposition vs C2: +25 helped, -20 hurt, net +5
+- Routing accuracy vs oracle choices: 0.604
 
 Reference: `results/final_reports/phase3_results.md`
 
@@ -32,4 +32,4 @@ Reference: `results/final_reports/phase3_results.md`
 
 1. Phase 1 establishes `C2` as strongest fixed baseline.
 2. Phase 2 shows a modest but real oracle gain over fixed retrieval.
-3. Phase 3 shows the current classifier does not yet recover enough signal to beat `C2`.
+3. Phase 3 now beats `C2` and recovers part of the oracle gap with a conservative routing setup.

@@ -40,22 +40,19 @@ TYPE_HEADER_NAMES = [
     "temp",
 ]
 
-CLASSIFIER_PROMPT_TEMPLATE = """Classify this question from a conversational AI memory system into exactly one category.
+CLASSIFIER_PROMPT_VERSION = "v2_config_router_fewshot"
 
-Categories:
-- temporal-reasoning: Asks about WHEN something happened, time durations, ordering of events, or references specific dates/times
-- knowledge-update: Asks about something that may have changed or been updated over time (current state, latest info)
-- multi-session: Requires synthesizing information across multiple separate conversations
-- single-session-user: Asks about a specific fact the user mentioned in a single conversation
-- single-session-assistant: Asks about something the AI assistant said or recommended
-- single-session-preference: Asks about the user's personal preferences, tastes, or opinions
-- abstention: The question asks about something that was likely never discussed
-
-Question: "{question_text}"
-
-Answer with ONLY the category name, nothing else."""
-
-VALID_TYPES = set(ORACLE_TYPE_TO_CONFIG.keys())
+# Routing labels -> retrieval config.
+# DEFAULT should dominate when uncertain to avoid harmful over-routing away from C2.
+ROUTE_LABEL_TO_CONFIG = {
+    "DEFAULT": "C2",
+    "TEMPORAL": "C4",
+    "PREFERENCE": "C4",
+    "ABSTENTION": "C3",
+    "SIMPLE_FACT": "C0",
+}
+ROUTE_LABEL_ORDER = ["DEFAULT", "TEMPORAL", "PREFERENCE", "ABSTENTION", "SIMPLE_FACT", "INVALID"]
+VALID_ROUTE_LABELS = set(ROUTE_LABEL_TO_CONFIG.keys())
 
 
 def parse_args() -> argparse.Namespace:
@@ -256,16 +253,12 @@ def per_question_oracle_metrics(
     return out
 
 
-def canonicalize_type_label(raw_text: str) -> str:
+def canonicalize_route_label(raw_text: str) -> str:
     s = raw_text.strip().lower()
     s = s.replace("_", "-")
-    s = s.replace("single session", "single-session")
-    s = s.replace("multi session", "multi-session")
-    s = s.replace("knowledge update", "knowledge-update")
-    s = s.replace("temporal reasoning", "temporal-reasoning")
-    s = s.replace("single-session assistant", "single-session-assistant")
-    s = s.replace("single-session user", "single-session-user")
-    s = s.replace("single-session preference", "single-session-preference")
+    s = s.replace("simple-fact", "simple fact")
+    s = s.replace("single-fact", "simple fact")
+    s = s.replace("single fact", "simple fact")
 
     if "\n" in s:
         s = s.split("\n", 1)[0].strip()
@@ -273,9 +266,102 @@ def canonicalize_type_label(raw_text: str) -> str:
         s = s.split(":", 1)[0].strip()
     s = s.strip(" .\"'")
 
-    if s in VALID_TYPES:
-        return s
+    aliases = {
+        "default": "DEFAULT",
+        "c2": "DEFAULT",
+        "temporal": "TEMPORAL",
+        "c4": "TEMPORAL",
+        "preference": "PREFERENCE",
+        "abstention": "ABSTENTION",
+        "c3": "ABSTENTION",
+        "simple fact": "SIMPLE_FACT",
+        "simple_fact": "SIMPLE_FACT",
+        "c0": "SIMPLE_FACT",
+    }
+    if s in aliases:
+        return aliases[s]
     return "INVALID"
+
+
+def route_label_from_true_type(qtype: str) -> str:
+    if qtype == "temporal-reasoning":
+        return "TEMPORAL"
+    if qtype == "single-session-preference":
+        return "PREFERENCE"
+    if qtype == "abstention":
+        return "ABSTENTION"
+    if qtype == "single-session-user":
+        return "SIMPLE_FACT"
+    return "DEFAULT"
+
+
+def build_fewshot_examples(
+    data_entries: List[dict],
+    qid_to_type: Dict[str, str],
+    config_labels: Dict[str, Dict[str, bool]],
+    max_per_label: int = 2,
+) -> Dict[str, List[dict]]:
+    qid_to_entry = {entry["question_id"]: entry for entry in data_entries}
+    oracle_cfg_by_qid = oracle_assignments(qid_to_type)
+    buckets: Dict[str, List[dict]] = defaultdict(list)
+
+    for qid in sorted(qid_to_type.keys()):
+        oracle_cfg = oracle_cfg_by_qid[qid]
+        if oracle_cfg == "C2":
+            continue
+        if config_labels[oracle_cfg][qid] and not config_labels["C2"][qid]:
+            qtype = qid_to_type[qid]
+            label = route_label_from_true_type(qtype)
+            if label == "DEFAULT":
+                continue
+            buckets[label].append(
+                {
+                    "question_id": qid,
+                    "question": qid_to_entry[qid]["question"],
+                    "true_type": qtype,
+                    "oracle_config": oracle_cfg,
+                }
+            )
+
+    selected: Dict[str, List[dict]] = {}
+    for label in ["TEMPORAL", "PREFERENCE", "ABSTENTION", "SIMPLE_FACT"]:
+        selected[label] = buckets[label][:max_per_label]
+    return selected
+
+
+def format_fewshot_block(fewshot_examples: Dict[str, List[dict]]) -> str:
+    lines: List[str] = []
+    for label in ["TEMPORAL", "PREFERENCE", "ABSTENTION", "SIMPLE_FACT"]:
+        examples = fewshot_examples.get(label, [])
+        if not examples:
+            continue
+        lines.append(f"{label} examples:")
+        for ex in examples:
+            lines.append(f'- Q: "{ex["question"]}"')
+            lines.append(f"  A: {label}")
+    return "\n".join(lines)
+
+
+def build_classifier_prompt(question_text: str, fewshot_examples: Dict[str, List[dict]]) -> str:
+    fewshot_block = format_fewshot_block(fewshot_examples)
+    return f"""You are a retrieval router for a conversational AI memory system.
+Given a user's question, decide which retrieval strategy to use.
+
+Strategies:
+- DEFAULT: General retrieval with temporal weighting. Use for most questions, especially facts/counts and potentially updated or multi-conversation information.
+- TEMPORAL: Enhanced temporal + query expansion. Use ONLY when the question explicitly asks when something happened, temporal ordering, or duration.
+- PREFERENCE: Same retrieval config as TEMPORAL. Use for subjective user likes/dislikes, tastes, or personal preferences.
+- ABSTENTION: Diversity-focused retrieval. Use ONLY when the question is likely asking about something never discussed.
+- SIMPLE_FACT: Baseline retrieval. Use for direct single-fact user recall with no strong temporal/update/multi-session signal.
+
+If unsure, choose DEFAULT.
+
+Few-shot examples:
+{fewshot_block}
+
+Question: "{question_text}"
+
+Answer with ONLY one of: DEFAULT, TEMPORAL, PREFERENCE, ABSTENTION, SIMPLE_FACT"""
 
 
 def create_openai_client(api_key: str = None, organization: str = None):
@@ -294,12 +380,11 @@ def create_openai_client(api_key: str = None, organization: str = None):
 
 def classify_question(
     client,
-    question_text: str,
+    prompt: str,
     model: str,
     max_retries: int,
     retry_sleep_seconds: float,
 ) -> str:
-    prompt = CLASSIFIER_PROMPT_TEMPLATE.format(question_text=question_text)
     last_error = None
     for attempt in range(max_retries):
         try:
@@ -310,7 +395,7 @@ def classify_question(
                 max_tokens=16,
             )
             raw = completion.choices[0].message.content or ""
-            return canonicalize_type_label(raw)
+            return canonicalize_route_label(raw)
         except Exception as exc:  # pragma: no cover - runtime safety for API retries.
             last_error = exc
             sleep_s = retry_sleep_seconds * (2 ** attempt)
@@ -331,6 +416,7 @@ def save_cache(cache_file: Path, cache: Dict[str, dict]) -> None:
 
 def run_classifier_routing(
     data_entries: List[dict],
+    fewshot_examples: Dict[str, List[dict]],
     cache_file: Path,
     model: str,
     api_key: str,
@@ -340,7 +426,7 @@ def run_classifier_routing(
 ) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, dict]]:
     cache = load_cache(cache_file)
     client = None
-    predicted_type_by_qid: Dict[str, str] = {}
+    predicted_label_by_qid: Dict[str, str] = {}
     assigned_config_by_qid: Dict[str, str] = {}
 
     cache_hits = 0
@@ -352,35 +438,42 @@ def run_classifier_routing(
         question = entry["question"]
 
         cached = cache.get(qid)
-        if cached and cached.get("model") == model and cached.get("predicted_type"):
-            predicted_type = cached["predicted_type"]
+        if (
+            cached
+            and cached.get("model") == model
+            and cached.get("prompt_version") == CLASSIFIER_PROMPT_VERSION
+            and cached.get("predicted_label")
+        ):
+            predicted_label = cached["predicted_label"]
             cache_hits += 1
         else:
             if client is None:
                 client = create_openai_client(api_key=api_key, organization=organization)
-            predicted_type = classify_question(
+            prompt = build_classifier_prompt(question_text=question, fewshot_examples=fewshot_examples)
+            predicted_label = classify_question(
                 client=client,
-                question_text=question,
+                prompt=prompt,
                 model=model,
                 max_retries=max_retries,
                 retry_sleep_seconds=retry_sleep_seconds,
             )
             cache[qid] = {
-                "predicted_type": predicted_type,
+                "predicted_label": predicted_label,
                 "model": model,
+                "prompt_version": CLASSIFIER_PROMPT_VERSION,
                 "question": question,
             }
             cache_misses += 1
             if cache_misses % 20 == 0:
                 save_cache(cache_file, cache)
 
-        if predicted_type not in VALID_TYPES:
-            predicted_type_by_qid[qid] = "INVALID"
+        if predicted_label not in VALID_ROUTE_LABELS:
+            predicted_label_by_qid[qid] = "INVALID"
             assigned_config_by_qid[qid] = "C2"
             invalid_count += 1
         else:
-            predicted_type_by_qid[qid] = predicted_type
-            assigned_config_by_qid[qid] = ORACLE_TYPE_TO_CONFIG[predicted_type]
+            predicted_label_by_qid[qid] = predicted_label
+            assigned_config_by_qid[qid] = ROUTE_LABEL_TO_CONFIG[predicted_label]
 
         if idx % 50 == 0:
             print(f"Classifier progress: {idx}/{len(data_entries)}")
@@ -389,22 +482,27 @@ def run_classifier_routing(
     print(
         f"Classifier cache summary: hits={cache_hits}, misses={cache_misses}, invalid_predictions={invalid_count}"
     )
-    return assigned_config_by_qid, predicted_type_by_qid, cache
+    return assigned_config_by_qid, predicted_label_by_qid, cache
 
 
 def build_confusion_matrix(
     qid_to_true_type: Dict[str, str],
-    qid_to_pred_type: Dict[str, str],
+    qid_to_pred_label: Dict[str, str],
 ) -> Dict[str, Dict[str, int]]:
-    labels = list(TYPE_DISPLAY_ORDER[1:]) + ["INVALID"]
+    true_labels = sorted(set(qid_to_true_type.values()))
+    pred_labels = [label for label in ROUTE_LABEL_ORDER if label in set(qid_to_pred_label.values()) | {"INVALID"}]
+    for pred in sorted(set(qid_to_pred_label.values())):
+        if pred not in pred_labels:
+            pred_labels.append(pred)
+
     matrix: Dict[str, Dict[str, int]] = {}
-    for true_label in labels:
-        matrix[true_label] = {pred_label: 0 for pred_label in labels}
+    for true_label in true_labels:
+        matrix[true_label] = {pred_label: 0 for pred_label in pred_labels}
 
     for qid, true_type in qid_to_true_type.items():
-        pred_type = qid_to_pred_type.get(qid, "INVALID")
+        pred_type = qid_to_pred_label.get(qid, "INVALID")
         if true_type not in matrix:
-            matrix[true_type] = {pred_label: 0 for pred_label in labels}
+            matrix[true_type] = {pred_label: 0 for pred_label in pred_labels}
         if pred_type not in matrix[true_type]:
             for row in matrix.values():
                 row[pred_type] = 0
@@ -540,8 +638,19 @@ def main() -> None:
     classifier_payload = None
 
     if args.mode in {"classifier", "all"}:
-        assigned_cfg_by_qid, predicted_type_by_qid, _ = run_classifier_routing(
+        fewshot_examples = build_fewshot_examples(
             data_entries=data_entries,
+            qid_to_type=qid_to_type,
+            config_labels=config_labels,
+            max_per_label=2,
+        )
+        print("\nFew-shot selection summary:")
+        for label in ["TEMPORAL", "PREFERENCE", "ABSTENTION", "SIMPLE_FACT"]:
+            print(f"  {label}: {len(fewshot_examples.get(label, []))} examples")
+
+        assigned_cfg_by_qid, predicted_label_by_qid, _ = run_classifier_routing(
+            data_entries=data_entries,
+            fewshot_examples=fewshot_examples,
             cache_file=cache_file,
             model=args.classifier_model,
             api_key=args.openai_api_key,
@@ -555,7 +664,7 @@ def main() -> None:
         write_jsonl(classifier_hyp_path, classifier_rows)
 
         classifier_metrics = compute_accuracy_from_assignments(assigned_cfg_by_qid, qid_to_type, config_labels)
-        confusion = build_confusion_matrix(qid_to_type, predicted_type_by_qid)
+        confusion = build_confusion_matrix(qid_to_type, predicted_label_by_qid)
         route_acc = routing_accuracy(assigned_cfg_by_qid, oracle_cfg_by_qid)
         classifier_gain = gain_decomposition_against_c2(assigned_cfg_by_qid, config_labels)
 
@@ -564,10 +673,12 @@ def main() -> None:
             "metrics": classifier_metrics,
             "routing_accuracy_against_oracle": route_acc,
             "gain_vs_c2": classifier_gain,
-            "predicted_type_counts": dict(Counter(predicted_type_by_qid.values())),
+            "predicted_label_counts": dict(Counter(predicted_label_by_qid.values())),
             "assigned_config_counts": dict(Counter(assigned_cfg_by_qid.values())),
             "confusion_matrix": confusion,
             "cache_file": str(cache_file),
+            "prompt_version": CLASSIFIER_PROMPT_VERSION,
+            "fewshot_examples": fewshot_examples,
         }
         out_payload["classifier"] = classifier_payload
         print(f"\nSaved classifier hypothesis file to {classifier_hyp_path}")

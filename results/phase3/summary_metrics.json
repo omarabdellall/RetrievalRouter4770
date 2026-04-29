@@ -75,121 +75,154 @@
   "classifier": {
     "hypothesis_file": "results/phase3/classifier_hypothesis.jsonl",
     "metrics": {
-      "overall": 0.68,
-      "abstention": 0.8,
+      "overall": 0.7,
+      "abstention": 0.8333333333333334,
       "knowledge-update": 0.7777777777777778,
-      "multi-session": 0.4628099173553719,
+      "multi-session": 0.512396694214876,
       "single-session-assistant": 0.8214285714285714,
-      "single-session-preference": 0.6666666666666666,
+      "single-session-preference": 0.7,
       "single-session-user": 0.890625,
-      "temporal-reasoning": 0.6377952755905512
+      "temporal-reasoning": 0.6535433070866141
     },
-    "routing_accuracy_against_oracle": 0.474,
+    "routing_accuracy_against_oracle": 0.604,
     "gain_vs_c2": {
-      "helped_vs_c2": 18,
-      "hurt_vs_c2": 23,
-      "net_gain_vs_c2": -5,
-      "switched_from_c2": 402,
-      "tied_correct": 322,
-      "tied_wrong": 137
+      "helped_vs_c2": 25,
+      "hurt_vs_c2": 20,
+      "net_gain_vs_c2": 5,
+      "switched_from_c2": 371,
+      "tied_correct": 325,
+      "tied_wrong": 130
     },
-    "predicted_type_counts": {
-      "single-session-user": 203,
-      "abstention": 31,
-      "temporal-reasoning": 149,
-      "multi-session": 84,
-      "single-session-assistant": 10,
-      "single-session-preference": 19,
-      "knowledge-update": 4
+    "predicted_label_counts": {
+      "SIMPLE_FACT": 80,
+      "ABSTENTION": 56,
+      "DEFAULT": 129,
+      "TEMPORAL": 192,
+      "PREFERENCE": 43
     },
     "assigned_config_counts": {
-      "C0": 203,
-      "C3": 31,
-      "C4": 168,
-      "C2": 98
+      "C0": 80,
+      "C3": 56,
+      "C2": 129,
+      "C4": 235
     },
     "confusion_matrix": {
       "abstention": {
-        "abstention": 2,
-        "knowledge-update": 0,
-        "multi-session": 2,
-        "single-session-assistant": 0,
-        "single-session-preference": 0,
-        "single-session-user": 15,
-        "temporal-reasoning": 11,
+        "DEFAULT": 4,
+        "TEMPORAL": 14,
+        "PREFERENCE": 0,
+        "ABSTENTION": 5,
+        "SIMPLE_FACT": 7,
         "INVALID": 0
       },
       "knowledge-update": {
-        "abstention": 7,
-        "knowledge-update": 2,
-        "multi-session": 12,
-        "single-session-assistant": 0,
-        "single-session-preference": 1,
-        "single-session-user": 44,
-        "temporal-reasoning": 6,
+        "DEFAULT": 23,
+        "TEMPORAL": 8,
+        "PREFERENCE": 6,
+        "ABSTENTION": 18,
+        "SIMPLE_FACT": 17,
         "INVALID": 0
       },
       "multi-session": {
-        "abstention": 11,
-        "knowledge-update": 0,
-        "multi-session": 12,
-        "single-session-assistant": 0,
-        "single-session-preference": 0,
-        "single-session-user": 69,
-        "temporal-reasoning": 29,
+        "DEFAULT": 44,
+        "TEMPORAL": 39,
+        "PREFERENCE": 1,
+        "ABSTENTION": 21,
+        "SIMPLE_FACT": 16,
         "INVALID": 0
       },
       "single-session-assistant": {
-        "abstention": 0,
-        "knowledge-update": 0,
-        "multi-session": 41,
-        "single-session-assistant": 8,
-        "single-session-preference": 0,
-        "single-session-user": 6,
-        "temporal-reasoning": 1,
+        "DEFAULT": 47,
+        "TEMPORAL": 3,
+        "PREFERENCE": 2,
+        "ABSTENTION": 0,
+        "SIMPLE_FACT": 4,
         "INVALID": 0
       },
       "single-session-preference": {
-        "abstention": 1,
-        "knowledge-update": 2,
-        "multi-session": 0,
-        "single-session-assistant": 2,
-        "single-session-preference": 18,
-        "single-session-user": 7,
-        "temporal-reasoning": 0,
+        "DEFAULT": 1,
+        "TEMPORAL": 0,
+        "PREFERENCE": 29,
+        "ABSTENTION": 0,
+        "SIMPLE_FACT": 0,
         "INVALID": 0
       },
       "single-session-user": {
-        "abstention": 10,
-        "knowledge-update": 0,
-        "multi-session": 2,
-        "single-session-assistant": 0,
-        "single-session-preference": 0,
-        "single-session-user": 46,
-        "temporal-reasoning": 6,
+        "DEFAULT": 4,
+        "TEMPORAL": 10,
+        "PREFERENCE": 5,
+        "ABSTENTION": 9,
+        "SIMPLE_FACT": 36,
         "INVALID": 0
       },
       "temporal-reasoning": {
-        "abstention": 0,
-        "knowledge-update": 0,
-        "multi-session": 15,
-        "single-session-assistant": 0,
-        "single-session-preference": 0,
-        "single-session-user": 16,
-        "temporal-reasoning": 96,
-        "INVALID": 0
-      },
-      "INVALID": {
-        "abstention": 0,
-        "knowledge-update": 0,
-        "multi-session": 0,
-        "single-session-assistant": 0,
-        "single-session-preference": 0,
-        "single-session-user": 0,
-        "temporal-reasoning": 0,
+        "DEFAULT": 6,
+        "TEMPORAL": 118,
+        "PREFERENCE": 0,
+        "ABSTENTION": 3,
+        "SIMPLE_FACT": 0,
         "INVALID": 0
       }
     },
-    "cache_file": "results/phase2/classification_cache.json"
+    "cache_file": "results/phase3/classification_cache_v2.json",
+    "prompt_version": "v2_config_router_fewshot",
+    "fewshot_examples": {
+      "TEMPORAL": [
+        {
+          "question_id": "4dfccbf8",
+          "question": "What did I do with Rachel on the Wednesday two months ago?",
+          "true_type": "temporal-reasoning",
+          "oracle_config": "C4"
+        },
+        {
+          "question_id": "af082822",
+          "question": "How many weeks ago did I attend the friends and family sale at Nordstrom?",
+          "true_type": "temporal-reasoning",
+          "oracle_config": "C4"
+        }
+      ],
+      "PREFERENCE": [
+        {
+          "question_id": "06f04340",
+          "question": "What should I serve for dinner this weekend with my homegrown ingredients?",
+          "true_type": "single-session-preference",
+          "oracle_config": "C4"
+        },
+        {
+          "question_id": "0a34ad58",
+          "question": "I\u2019m a bit anxious about getting around Tokyo. Do you have any helpful tips?",
+          "true_type": "single-session-preference",
+          "oracle_config": "C4"
+        }
+      ],
+      "ABSTENTION": [
+        {
+          "question_id": "29f2956b_abs",
+          "question": "How much time do I dedicate to practicing violin every day?",
+          "true_type": "abstention",
+          "oracle_config": "C3"
+        },
+        {
+          "question_id": "6aeb4375_abs",
+          "question": "How many Italian restaurants have I tried in my city?",
+          "true_type": "abstention",
+          "oracle_config": "C3"
+        }
+      ],
+      "SIMPLE_FACT": [
+        {
+          "question_id": "66f24dbb",
+          "question": "What did I buy for my sister's birthday gift?",
+          "true_type": "single-session-user",
+          "oracle_config": "C0"
+        },
+        {
+          "question_id": "e01b8e2f",
+          "question": "Where did I go on a week-long trip with my family?",
+          "true_type": "single-session-user",
+          "oracle_config": "C0"
+        }
+      ]
+    }
   }
 }
