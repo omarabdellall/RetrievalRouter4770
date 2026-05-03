@@ -3,11 +3,11 @@
 Adaptive retrieval for LongMemEval
 Omar Abdellall, Aryan Agarwal
 
-This repository extends [LongMemEval](https://github.com/xiaowu0162/longmemeval) with a full Phase 1 combinatorial ablation over three retrieval augmentations:
+This repository extends [LongMemEval](https://github.com/xiaowu0162/longmemeval) with adaptive retrieval routing for long-term conversational memory. The project has three phases:
 
-- Query Expansion (QE)
-- Temporal Decay (TD)
-- MMR Diversity (MMR)
+- **Phase 1:** Full combinatorial ablation over Query Expansion (QE), Temporal Decay (TD), and MMR Diversity (MMR).
+- **Phase 2:** Oracle router upper bounds using the Phase 1 outputs.
+- **Phase 3:** Query-only LLM classifier router using `gpt-4o-mini-2024-07-18`.
 
 Phase 1 evaluates all 8 configs (`C0`-`C7`) on `longmemeval_s_cleaned` and reports:
 
@@ -23,8 +23,20 @@ Runs all ablation configs and writes retrieval logs in generation-compatible for
 Aggregates per-config QA/retrieval results into summary tables.
 - `run_phase1.sh`  
 End-to-end orchestrator: retrieval -> generation -> QA evaluation -> aggregation.
+- `src/augmented_retrieval/phase2_router.py`  
+Builds oracle and classifier router hypothesis files from the existing Phase 1 outputs.
+- `src/augmented_retrieval/phase3_classifier_router.py`  
+Convenience entrypoint for the final Phase 3 classifier router.
 - `results/phase1/`  
 Generated Phase 1 outputs and tables.
+- `results/phase2/`  
+Oracle router outputs.
+- `results/phase3/`  
+Classifier router outputs.
+- `REPRODUCIBILITY_CHECKLIST.md`  
+Standalone reproducibility checklist for submission.
+- `PROMPTS_APPENDIX.md`  
+Auxiliary prompt appendix for the experimental pipeline.
 
 ## 1) Environment setup
 
@@ -85,7 +97,71 @@ What this does:
 3. Runs QA judging with `gpt-4o-2024-08-06`.
 4. Aggregates all outputs to `results/phase1/`.
 
-## 5) Main outputs
+## 5) Run Phase 2 oracle router
+
+Phase 2 reuses the Phase 1 generation and evaluation logs. It does not rerun retrieval, generation, or GPT-4o judging.
+
+```bash
+source .venv/bin/activate
+python -m src.augmented_retrieval.phase2_router \
+  --mode oracle \
+  --data_file data/longmemeval_s_cleaned.json \
+  --generation_root generation_logs/augmented \
+  --output_dir results/phase2
+```
+
+Expected outputs:
+
+- `results/phase2/oracle_hypothesis.jsonl`
+- `results/phase2/summary_metrics.json`
+- `results/phase2/summary_table.txt`
+
+Current key result:
+
+- Best fixed C2: `0.690`
+- Type oracle: `0.706`
+- Per-question oracle: `0.806`
+
+## 6) Run Phase 3 classifier router
+
+Phase 3 runs the deployable query-only LLM classifier router. It uses `gpt-4o-mini-2024-07-18`, so `OPENAI_API_KEY` must be set in `.env` unless using the existing cache.
+
+Fresh run:
+
+```bash
+source .venv/bin/activate
+set -a && source .env && set +a
+python -m src.augmented_retrieval.phase3_classifier_router \
+  --data_file data/longmemeval_s_cleaned.json \
+  --generation_root generation_logs/augmented \
+  --output_dir results/phase3
+```
+
+Cached rerun (uses `results/phase3/classification_cache_v2.json` if present):
+
+```bash
+source .venv/bin/activate
+python -m src.augmented_retrieval.phase3_classifier_router \
+  --data_file data/longmemeval_s_cleaned.json \
+  --generation_root generation_logs/augmented \
+  --output_dir results/phase3
+```
+
+Expected outputs:
+
+- `results/phase3/classifier_hypothesis.jsonl`
+- `results/phase3/classification_cache_v2.json`
+- `results/phase3/classifier_confusion_matrix.json`
+- `results/phase3/summary_metrics.json`
+- `results/phase3/summary_table.txt`
+
+Current key result:
+
+- Query-only classifier router: `0.700`
+- Net gain over best fixed C2: `+5` questions out of 500
+- Routing accuracy against type oracle: `0.604`
+
+## 7) Main outputs
 
 - `results/phase1/summary.md`  
 Aggregated QA + retrieval tables.
@@ -93,13 +169,19 @@ Aggregated QA + retrieval tables.
 Raw structured metrics by config/type.
 - `results/phase1/tables.md`  
 Assignment-ready tables (overall, per-type, winner summary).
+- `results/phase2/summary_metrics.json`  
+Oracle router metrics and gain/loss decomposition.
+- `results/phase3/summary_metrics.json`  
+Classifier router metrics, prompt metadata, few-shot examples, and confusion matrix.
+- `results/final_reports/`  
+Markdown summaries for Phase 1, Phase 2, Phase 3, and combined results.
 
 Intermediate logs:
 
 - `retrieval_logs/augmented/config_C*/longmemeval_s_cleaned_retrievallog_turn_contriever.jsonl`
 - `generation_logs/augmented/config_C*/...`
 
-## 6) Quick smoke test (before full run)
+## 8) Quick smoke test (before full run)
 
 ```bash
 source .venv/bin/activate
@@ -110,7 +192,7 @@ source .venv/bin/activate
   --device cpu
 ```
 
-## 7) Reproducibility checklist response
+## 9) Reproducibility checklist response
 
 - Code and scripts provided for full experiment pipeline
 - Exact commands documented
@@ -119,13 +201,44 @@ source .venv/bin/activate
 - Randomness/API nondeterminism caveat documented
 - All reported metrics generated from committed code paths
 - Output artifact locations documented
+- Standalone checklist provided in `REPRODUCIBILITY_CHECKLIST.md`
+- Prompt appendix provided in `PROMPTS_APPENDIX.md`
 
 Notes:
 
 - OpenAI-based generation/judging introduces minor run-to-run variance.
 - Costs and wall-clock runtime depend on API latency and local hardware.
 
-## 8) Upstream attribution
+## 10) Reproduce final reported numbers
+
+After Phase 1 artifacts exist, the final reported numbers can be regenerated with:
+
+```bash
+source .venv/bin/activate
+python -m src.augmented_retrieval.phase2_router \
+  --mode oracle \
+  --data_file data/longmemeval_s_cleaned.json \
+  --generation_root generation_logs/augmented \
+  --output_dir results/phase2
+
+set -a && source .env && set +a
+python -m src.augmented_retrieval.phase3_classifier_router \
+  --data_file data/longmemeval_s_cleaned.json \
+  --generation_root generation_logs/augmented \
+  --output_dir results/phase3
+```
+
+Expected summary:
+
+| Strategy | Accuracy |
+| --- | ---: |
+| Baseline C0 | 0.684 |
+| Best fixed C2 | 0.690 |
+| Type oracle | 0.706 |
+| Per-question oracle | 0.806 |
+| Query-only classifier router | 0.700 |
+
+## 11) Upstream attribution
 
 This project is built on LongMemEval:
 
